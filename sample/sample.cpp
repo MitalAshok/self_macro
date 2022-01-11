@@ -25,12 +25,12 @@ static_assert(is_same_v<test2<int>, typename test2<int>::self>, "");
 struct test3 {
     struct tag;
     struct {
-        int anon_member = SELF_MACRO_STORE_TYPE_WITH_EXPR(tag, typename std::remove_pointer<decltype(this)>::type, 0);
+        int anon_member = self_macro::store<tag, typename std::remove_pointer<decltype(this)>::type>(0);
     };
     int other_member;
     static void f() {
         // Must be done inside after initializers have been instantiated
-        using anonymous_struct_type = SELF_MACRO_RETRIEVE_TYPE(tag);
+        using anonymous_struct_type = self_macro::retrieve<tag>;
         static_assert(!is_same_v<anonymous_struct_type, test3>, "");
         constexpr anonymous_struct_type a{1};
 #if defined(__clang__) || defined(_MSC_VER)
@@ -64,7 +64,7 @@ int main() {
     test2<int> b;
     if (b.x() != &b) return 1;
 
-    using anonymous_struct_type = SELF_MACRO_RETRIEVE_TYPE(test3::tag);
+    using anonymous_struct_type = self_macro::retrieve<test3::tag>;
     static_assert(sizeof(anonymous_struct_type) == sizeof(int), "");
     static_assert(sizeof(test3) == 2 * sizeof(int), "");
     p<anonymous_struct_type>();
@@ -75,9 +75,9 @@ int main() {
 
     struct anon_union_tag;
     union {
-        int function_scope_anon_union = SELF_MACRO_STORE_TYPE_WITH_EXPR(anon_union_tag, typename std::remove_pointer<decltype(this)>::type, 0);
+        int function_scope_anon_union = self_macro::store<anon_union_tag, typename std::remove_pointer<decltype(this)>::type>(0);
     };
-    using anon_union_type = SELF_MACRO_RETRIEVE_TYPE(anon_union_tag);
+    using anon_union_type = self_macro::retrieve<anon_union_tag>;
     p<anon_union_type>();
 }
 
@@ -88,14 +88,14 @@ struct map_key : std::integral_constant<int, K> {};
 static_assert((
     // SELF_MACRO_STORE_TYPE(map_key<1>, signed char),
     // SELF_MACRO_STORE_TYPE(map_key<2>, short),
-    SELF_MACRO_STORE_TYPE(map_key<4>, SELF_MACRO_STORE_TYPE_WITH_TYPE(map_key<3>, int, long)),
-    SELF_MACRO_STORE_TYPE(map_key<5>, long long),
-    SELF_MACRO_STORE_TYPE_WITH_EXPR(map_key<0>, char, true) &&
-    SELF_MACRO_STORE_TYPE_WITH_EXPR(map_key<-1>, unsigned char, true) &&
-    SELF_MACRO_STORE_TYPE_WITH_EXPR(map_key<-2>, unsigned short, true) &&
-    SELF_MACRO_STORE_TYPE_WITH_EXPR(map_key<-3>, unsigned int, true) &&
-    SELF_MACRO_STORE_TYPE_WITH_EXPR(map_key<-4>, unsigned long, true) &&
-    SELF_MACRO_STORE_TYPE_WITH_EXPR(map_key<-5>, unsigned long long, true) &&
+    self_macro::store<map_key<4>, self_macro::store_with_type<map_key<3>, int, long>>(),
+    self_macro::store<map_key<5>, long long>(),
+    self_macro::store<map_key<0>, char>(),  // (void expression)
+    self_macro::store<map_key<-1>, unsigned char>(true) &&
+    self_macro::store<map_key<-2>, unsigned short>(true) &&
+    self_macro::store<map_key<-3>, unsigned int>(true) &&
+    self_macro::store<map_key<-4>, unsigned long>(true) &&
+    self_macro::store<map_key<-5>, unsigned long long>(true) &&
     true
 ), "");
 
@@ -103,7 +103,7 @@ SELF_MACRO_STORE_TYPE_EXPLICIT_INST(map_key<1>, signed char);
 SELF_MACRO_STORE_TYPE_DECL(map_key<2>, short);
 
 template<int i>
-using get_from_map = SELF_MACRO_RETRIEVE_TYPE(map_key<i>);
+using get_from_map = self_macro::retrieve<map_key<i>>;
 
 static_assert(is_same_v<get_from_map<0>, char>, "");
 static_assert(is_same_v<get_from_map<1>, signed char>, "");

@@ -2,7 +2,7 @@
 #define SELF_MACRO_H
 
 
-namespace self_macro_namespace {
+namespace self_macro {
 namespace detail {
 
 template<typename T>
@@ -12,6 +12,9 @@ template<typename T>
 struct remove_pointer;
 template<typename T>
 struct remove_pointer<T*> { using type = T; };
+
+template<bool B, typename T>
+struct value_dependant_type_identity { using type = T; };
 
 template<typename Tag>
 struct _retrieve_type {
@@ -41,21 +44,38 @@ struct _store_type {
 };
 
 }
+
+template<typename Tag, typename ToStore>
+constexpr
+typename ::self_macro::detail::value_dependant_type_identity<(::self_macro::detail::_store_type<Tag, ToStore>{}, true), void>::type
+store() noexcept {
+    return static_cast<void>(::self_macro::detail::_store_type<Tag, ToStore>{});
 }
 
-#define SELF_MACRO_WRAP(...) typename decltype(::self_macro_namespace::detail::type_identity< __VA_ARGS__ >{})::type
-#define SELF_MACRO_STORE_TYPE(TAG, ...) static_cast<void>(::self_macro_namespace::detail::_store_type< TAG , __VA_ARGS__ >{})
-#define SELF_MACRO_STORE_TYPE_WITH_EXPR(TAG, TYPE, ...) (SELF_MACRO_STORE_TYPE( TAG , TYPE ), (__VA_ARGS__))
-#define SELF_MACRO_STORE_TYPE_WITH_TYPE(TAG, TYPE, ...) typename decltype(SELF_MACRO_STORE_TYPE_WITH_EXPR( TAG , TYPE , ::self_macro_namespace::detail::type_identity< __VA_ARGS__ >{}))::type
-#define SELF_MACRO_STORE_TYPE_DECL(TAG, ...) static_assert(SELF_MACRO_STORE_TYPE_WITH_EXPR( TAG, SELF_MACRO_WRAP( __VA_ARGS__ ), true), "")
-#define SELF_MACRO_STORE_TYPE_EXPLICIT_INST(TAG, ...) template struct self_macro_namespace::detail::_store_type< TAG, __VA_ARGS__ >
-#define SELF_MACRO_RETRIEVE_TYPE(...) typename decltype(::self_macro_namespace::detail::_retrieve_type< __VA_ARGS__ >{}._self_macro_retrieve_type_member_function())::type
+template<typename Tag, typename ToStore, typename T>
+constexpr
+typename ::self_macro::detail::value_dependant_type_identity<(::self_macro::detail::_store_type<Tag, ToStore>{}, true), T&&>::type
+store(T&& value) noexcept {
+    return (static_cast<void>(::self_macro::detail::_store_type<Tag, ToStore>{}), static_cast<T&&>(value));
+}
+
+template<typename Tag, typename ToStore, typename Result = ToStore>
+using store_with_type = typename ::self_macro::detail::value_dependant_type_identity<::self_macro::store<Tag, ToStore>(true), Result>::type;
+
+template<typename Tag>
+using retrieve = typename decltype(::self_macro::detail::_retrieve_type<Tag>{}._self_macro_retrieve_type_member_function())::type;
+
+}
+
+#define SELF_MACRO_WRAP(...) typename decltype(::self_macro::detail::type_identity< __VA_ARGS__ >{})::type
+#define SELF_MACRO_STORE_TYPE_DECL(TAG, ...) static_assert(::self_macro::store< TAG , __VA_ARGS__ >(true), "")
+#define SELF_MACRO_STORE_TYPE_EXPLICIT_INST(TAG, ...) template struct self_macro::detail::_store_type< TAG , __VA_ARGS__ >
 
 #define SELF_MACRO_DEFINE_SELF(NAME, ACCESS) \
 private: struct _self_macro_self_type_tag; \
-auto _self_macro_self_type_tag() -> decltype( \
-    SELF_MACRO_STORE_TYPE(struct _self_macro_self_type_tag, typename ::self_macro_namespace::detail::remove_pointer<decltype(this)>::type) \
-); \
-ACCESS: using NAME = SELF_MACRO_RETRIEVE_TYPE(struct _self_macro_self_type_tag)
+auto _self_macro_self_type_tag() -> \
+    ::self_macro::store_with_type<struct _self_macro_self_type_tag, \
+    typename ::self_macro::detail::remove_pointer<decltype(this)>::type, void>; \
+ACCESS: using NAME = ::self_macro::retrieve<struct _self_macro_self_type_tag>
 
 #endif  // SELF_MACRO_H

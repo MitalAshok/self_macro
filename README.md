@@ -17,38 +17,79 @@ struct struct_name {
 
 May be useful for code generation via other macros.
 
-## Macros
+## Usage
 
-### `SELF_MACRO_DEFINE_SELF(NAME, ACCESS)`
+### `#define SELF_MACRO_DEFINE_SELF(NAME, ACCESS)`
 
 `NAME` should be an id, and `ACCESS` one of `private`, `protected` or `public`.
 Equivalent to `ACCESS: using NAME = <self>`, where `<self>` is the type of the current class.
 
-### `SELF_MACRO_STORE_TYPE(TAG, TYPE)`
+### `store<Tag, ToStore>()`
 
-Associates `TYPE` (which denotes a type) with `TAG` (another type) when this expression is
-evaluated. Evaluates to a constexpr expression of type `void`.
+```c++
+namespace self_macro {
 
-### `SELF_MACRO_RETRIEVE_TYPE(TAG)`
+template<typename Tag, typename ToStore>
+constexpr void store() noexcept;
 
-If `SELF_MACRO_STORE_TYPE(TAG, TYPE)` has been evaluated for one unique
-type `TYPE`, this will evaluate to that type (without naming it).
+template<typename Tag, typename ToStore, typename T>
+constexpr T&& store(T&& value) noexcept;
 
-### `SELF_MACRO_STORE_TYPE_WITH_EXPR(TAG, TYPE, EXPR)`
+}
+```
 
-Literally `(SELF_MACRO_STORE_TYPE(TAG, TYPE), (EXPR))`: `SELF_MACRO_STORE_TYPE` as above
-and then evaluates to the given expression.
+Associates `ToStore` with `Tag` when this template is instantiated.
 
-### `SELF_MACRO_STORE_TYPE_WITH_TYPE(TAG, TYPE, RESULT_TYPE)`
+If passed an argument, return that same argument. Otherwise, returns nothing.
 
-Like `SELF_MACRO_STORE_TYPE_WITH_EXPR`, but with a type instead of an expression.
+### `typename retrieve<T>`
 
-### `SELF_MACRO_WRAP(...)`
+```c++
+namespace self_macro {
+
+template<typename Tag>
+using retrieve = /* ... */;
+
+}
+```
+
+If a type has been previously associated with the given `Tag`, this will be an
+alias for that type. If there is no association or more than one association, a compile
+time error will occur.
+
+### `typename store_with_type<Tag, ToStore, Result>`
+
+```c++
+namespace self_macro {
+
+template<typename Tag, typename ToStore, typename Result = ToStore>
+using store_with_type = /* ... */ Result;
+
+}
+```
+
+Like `store` but evaluates to a type so that it can be used in contexts that
+require a type: An alias for `Result` that associates `ToStore` with `Tag`
+when instantiated.
+
+### `#define SELF_MACRO_WRAP(...)`
 
 Wraps a variadic argument naming a type so it is safe to use as a single
 macro argument. E.g., `std::array<int, 5>` would be two macro
 arguments, `std::array<int` and `5>`, but `SELF_MACRO_WRAP(std::array<int, 5>)`
 would name the same type but be passed as one macro argument.
+
+### `#define SELF_MACRO_STORE_TYPE_DECL(TAG, TOSTORE)`
+
+Expands to a (`static_assert`) declaration that associates the type named by
+`TOSTORE` to the type named by `TAG` when instantiated. (Variadic, so no need to wrap
+either type name)
+
+### `#define SELF_MACRO_STORE_TYPE_EXPLICIT_INST(TAG, TOSTORE)`
+
+When placed in the `::` namespace (at file scope), expands to an explicit template
+specialisation that associates the type named by `TOSTORE` with the type named by
+`TAG`. In particular, this means that access checks are not done in any subexpression.
 
 ## How?
 
@@ -153,11 +194,10 @@ struct S {
     struct tag;
     union {
         int x = /* this here refers to the type of the anonymous union */
-            SELF_MACRO_STORE_TYPE_WITH_EXPR(
+            self_macro::store<
                 tag,
-                std::remove_pointer<decltype(this)>::type,
-                0
-            );  // tag is now associated with the unspeakable type!
+                std::remove_pointer<decltype(this)>::type
+            >(0);  // tag is now associated with the unspeakable type!
     };
     int a;
     // Can't use `SELF_MACRO_RETRIEVE_TYPE(tag)` here because x's 
@@ -165,7 +205,7 @@ struct S {
 };
 
 int main() {
-    using anonymous_union_type = SELF_MACRO_RETRIEVE_TYPE(S::tag);
+    using anonymous_union_type = self_macro::retrieve<S::tag>;
     static_assert(sizeof(anonymous_union_type) == sizeof(int));
     static_assert(sizeof(S) == 2 * sizeof(int));
     // anonymous_class_type is "S::<unnamed union>"
@@ -191,16 +231,16 @@ template<int K>
 struct map_key : std::integral_constant<int, K> {};
 
 static_assert((
-    SELF_MACRO_STORE_TYPE(map_key<0>, signed char),
-    SELF_MACRO_STORE_TYPE(map_key<1>, short),
-    SELF_MACRO_STORE_TYPE(map_key<2>, int),
-    SELF_MACRO_STORE_TYPE(map_key<3>, long),
-    SELF_MACRO_STORE_TYPE(map_key<4>, long long),
+    self_macro::store<map_key<0>, signed char>(),
+    self_macro::store<map_key<1>, short>(),
+    self_macro::store<map_key<2>, int>(),
+    self_macro::store<map_key<3>, long>(),
+    self_macro::store<map_key<4>, long long>(),
     true
 ), "");
 
 template<int i>
-using get_from_map = SELF_MACRO_RETRIEVE_TYPE(map_key<i>);
+using get_from_map = self_macro::retrieve<map_key<i>>;
 
 static_assert(std::is_same<get_from_map<0>, signed char>::value, "");
 static_assert(std::is_same<get_from_map<3>, long>::value, "");
@@ -215,7 +255,7 @@ You can also reimplement the private member accessor with these:
 
 ```c++
 // Setup: explicitly instantiate to store the type
-template<typename Tag, typename Type, Type Value, SELF_MACRO_STORE_TYPE_WITH_TYPE(Tag, SELF_MACRO_WRAP(std::integral_constant<Type, Value>), std::nullptr_t) = nullptr>
+template<typename Tag, typename Type, Type Value, self_macro::store_with_type<Tag, std::integral_constant<Type, Value>, std::nullptr_t> = nullptr>
 struct store_value {};
 
 // Type with private member we want to access
@@ -235,7 +275,7 @@ struct store_value<v_x_tag, int v::*, &v::x>;
 // SELF_MACRO_STORE_TYPE_EXPLICIT_INST(v_x_tag, std::integral_constant<int v::*, &v::x>);
 
 // Retrieve that value
-constexpr int v::* v_x = SELF_MACRO_RETRIEVE_TYPE(v_x_tag){};
+constexpr int v::* v_x = self_macro::retrieve<v_x_tag>{};
 
 
 // Test it
