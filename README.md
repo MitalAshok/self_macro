@@ -113,7 +113,7 @@ struct S {
     auto g(int y) /* this can be used here */ -> decltype(this->b + y) {
         return this->b + y;
     }
-    
+
     /* this cannot be used here */
     // using self = std::remove_pointer_t<decltype(this)>;
     // Nor in static member functions
@@ -153,7 +153,7 @@ struct store_type {
     }
 };
 
-// Implicitly instantiate `store_type<TAG, TYPE>` to make 
+// Implicitly instantiate `store_type<TAG, TYPE>` to make
 // `retrieve_type<TAG>::get` be `type_identity<TYPE>`
 #define STORE_TYPE(TAG, TYPE) static_cast<void>(store_type<TAG, TYPE>{})
 // Retrieve `TYPE` from `type_identity<TYPE>`
@@ -170,7 +170,7 @@ private: \
     ); \
 ACCESS: using NAME = RETRIEVE_TYPE(struct _)
 
-// Calling `DEFINE_SELF(NAME, ACCESS)` inside a struct `S` will 
+// Calling `DEFINE_SELF(NAME, ACCESS)` inside a struct `S` will
 // store `S` to the tag `S::_`, and `_` can easily be named inside the class
 ```
 
@@ -200,16 +200,15 @@ struct S {
             >(0);  // tag is now associated with the unspeakable type!
     };
     int a;
-    // Can't use `SELF_MACRO_RETRIEVE_TYPE(tag)` here because x's 
+    // Can't use `self_macro::retrieve<tag>` here because x's
     // initializer hasn't been instantiated yet (not a complete-class context)
 };
 
-int main() {
-    using anonymous_union_type = self_macro::retrieve<S::tag>;
-    static_assert(sizeof(anonymous_union_type) == sizeof(int));
-    static_assert(sizeof(S) == 2 * sizeof(int));
-    // anonymous_class_type is "S::<unnamed union>"
-}
+
+using anonymous_union_type = self_macro::retrieve<S::tag>;
+static_assert(sizeof(anonymous_union_type) == sizeof(int));
+static_assert(sizeof(S) == 2 * sizeof(int));
+// anonymous_class_type is "S::<unnamed union>"
 ```
 
 (It can also be named by simply calling a function in
@@ -246,12 +245,14 @@ static_assert(std::is_same<get_from_map<0>, signed char>::value, "");
 static_assert(std::is_same<get_from_map<3>, long>::value, "");
 ```
 
+[Try it on Compiler Explorer](https://godbolt.org/z/1Y315eGjo)
+
 Using a wrapper around `type_identity` for type keys and having
 `integral_constant` values for non-type values.
 
 ---
 
-You can also reimplement the private member accessor with these: 
+You can also reimplement the private member accessor with these:
 
 ```c++
 // Setup: explicitly instantiate to store the type
@@ -269,13 +270,13 @@ private:
 // an integral_constant holding `&v::x`
 struct v_x_tag;
 template
-struct store_value<v_x_tag, int v::*, &v::x>;
+struct store_value<v_x_tag, decltype(&v::x), &v::x>;
 
 // Or use the convenience macro:
-// SELF_MACRO_STORE_TYPE_EXPLICIT_INST(v_x_tag, std::integral_constant<int v::*, &v::x>);
+// SELF_MACRO_STORE_TYPE_EXPLICIT_INST(v_x_tag, std::integral_constant<decltype(&v::x), &v::x>);
 
 // Retrieve that value
-constexpr int v::* v_x = self_macro::retrieve<v_x_tag>{};
+constexpr int v::* v_x = self_macro::retrieve<v_x_tag>::value;
 
 
 // Test it
@@ -292,5 +293,7 @@ constexpr v get_modified(int to) {
 static_assert(get_default().get_x() == 4, "");
 static_assert(get_modified(7).get_x() == 7, "");
 ```
+
+[Try it on Compiler Explorer](https://godbolt.org/z/vr3G8Ybo3)
 
 (Though with a C++14 requirement over a C++11 requirement)
