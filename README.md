@@ -261,7 +261,7 @@ static_assert(std::is_same<get_from_map<0>, signed char>::value, "");
 static_assert(std::is_same<get_from_map<3>, long>::value, "");
 ```
 
-[Try it on Compiler Explorer](https://godbolt.org/z/1Y315eGjo)
+[Try it on Compiler Explorer](https://godbolt.org/z/8GEf86hKn)
 
 Using a wrapper around `type_identity` for type keys and having
 `integral_constant` values for non-type values.
@@ -310,6 +310,6 @@ static_assert(get_default().get_x() == 4, "");
 static_assert(get_modified(7).get_x() == 7, "");
 ```
 
-[Try it on Compiler Explorer](https://godbolt.org/z/vr3G8Ybo3)
+[Try it on Compiler Explorer](https://godbolt.org/z/8nEzn918v)
 
 (Though with a C++14 requirement over a C++11 requirement)
