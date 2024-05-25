@@ -50,11 +50,13 @@ template<typename T>
 void p() {
     std::cout <<
 #ifdef _MSC_VER
-        __FUNCSIG__ << '\n' <<
+        __FUNCSIG__
 #elif defined(__GNUC__) || defined(__clang__)
-        __PRETTY_FUNCTION__ << '\n' <<
+        __PRETTY_FUNCTION__
+#else
+        typeid(T).name()
 #endif
-        typeid(T).name() << '\n';
+    << '\n';
 }
 
 

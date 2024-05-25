@@ -1,10 +1,9 @@
 # self_macro
 
-C++14 header only library that exposes a macro that creates a type alias for
-the current class without naming it.
+A C++14 header only library that exposes a macro that creates a type alias
+for the current class without naming it.
 
-Also exposes macros that let you associate two types such that you can retrive
-the second type with the first.
+Also exposes macros for easy stateful template metaprogramming.
 
 For example:
 
@@ -15,22 +14,35 @@ struct struct_name {
 };
 ```
 
-May be useful for code generation via other macros.
+Useful for code generation via other macros.
+
+The only C++14 feature used is return type deduction `__cpp_decltype_auto >= 201304L`.
+If your compiler supports this in C++11 mode, this library can also be used
+in C++11. (Clang and GCC currently do not support this extension)
 
 ## Usage
 
 ### `#define SELF_MACRO_DEFINE_SELF(NAME, ACCESS)`
 
 `NAME` should be an id, and `ACCESS` one of `private`, `protected` or `public`.
-Equivalent to `ACCESS: using NAME = <self>`, where `<self>` is the type of the current class.
+Equivalent to `ACCESS: using NAME = <self>`, where `<self>` is the type of the
+current class. This will not be an injected-class-name.
+
+### `#define SELF_MACRO_DEFINE_SELF_NAMED_TAG(NAME, ACCESS, TAG_NAME)`
+
+`SELF_MACRO_DEFINE_SELF` uses a name
+`SELF_MACRO ## NAME ## SELF_MACRO`
+internally to define a member function and member nested class
+with that name. This macro lets you use a different custom name
+if the default is a problem.
 
 ### `store<Tag, ToStore>()`
 
 ```c++
 namespace self_macro {
 
-template<typename Tag, typename ToStore>
-constexpr void store() noexcept;
+template<typename Tag, typename ToStore, typename T = void>
+constexpr T store() noexcept(noexcept(T()));
 
 template<typename Tag, typename ToStore, typename T>
 constexpr T&& store(T&& value) noexcept;
@@ -38,9 +50,13 @@ constexpr T&& store(T&& value) noexcept;
 }
 ```
 
-Associates `ToStore` with `Tag` when this template is instantiated.
+Associates `ToStore` with `Tag` when these functions are used (even in an unevaluated context).
 
-If passed an argument, return that same argument. Otherwise, returns nothing.
+If passed an argument, return that same argument. Otherwise, returns `T()`.
+
+The association is done during overload resolution so if these
+are called via ADL (or if the compiler implements two phase lookup in a
+nonstandard way) the call may need to be instantiated first.
 
 ### `typename retrieve<T>`
 
@@ -54,8 +70,8 @@ using retrieve = /* ... */;
 ```
 
 If a type has been previously associated with the given `Tag`, this will be an
-alias for that type. If there is no association or more than one association, a compile
-time error will occur.
+alias for that type. If there is no association or more than one association,
+a non-SFINAE compile time error will occur.
 
 ### `typename store_with_type<Tag, ToStore, Result>`
 
